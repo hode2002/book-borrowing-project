@@ -1,9 +1,8 @@
-import express, { NextFunction, Request, Response } from 'express'
+import express from 'express'
+import UserRoute from './user.route'
 
 const router = express.Router()
 
-router.get('/', (req: Request, res: Response, next: NextFunction) => {
-    res.send('Welcome')
-})
+router.use('/users', UserRoute)
 
 export default router
