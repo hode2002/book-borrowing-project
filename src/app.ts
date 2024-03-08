@@ -23,12 +23,12 @@ app.use('/api/v1', initWebRoute)
 
 //handling error
 app.use((req: Request, res: Response, next: NextFunction) => {
-    const error = new Error('Not Found') as any
-    error['status'] = 404
+    const error = new Error('Resource not found') as any
+    error.status = 404
     next(error)
 })
 
-app.use((error: any, req: Request, res: Response) => {
+app.use((error: any, req: Request, res: Response, next: NextFunction) => {
     const statusCode = error.status || 500
     return res.status(statusCode).json({
         status: 'error',
