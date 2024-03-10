@@ -1,10 +1,13 @@
 import dotenv from 'dotenv'
 import helmet from 'helmet'
 import cors from 'cors'
-import initWebRoute from './routes/index'
+import initWebRoute from './routes'
 import express, { Request, Response, NextFunction } from 'express'
+import passport from 'passport'
 
 import { connect } from './db/init.mongodb'
+import { AtJwtStrategy, RfJwtStrategy } from './auth'
+import { ApiError } from './utils'
 
 dotenv.config()
 const app = express()
@@ -18,13 +21,16 @@ app.use(express.urlencoded({ extended: true }))
 //init database
 connect()
 
+//init strategies
+new AtJwtStrategy(passport).create()
+new RfJwtStrategy(passport).create()
+
 //init routes
 app.use('/api/v1', initWebRoute)
 
 //handling error
 app.use((req: Request, res: Response, next: NextFunction) => {
-    const error = new Error('Resource not found') as any
-    error.status = 404
+    const error = new ApiError(404, 'Resource not found') as any
     next(error)
 })
 
