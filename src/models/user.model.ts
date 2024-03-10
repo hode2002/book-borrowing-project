@@ -1,28 +1,23 @@
 import mongoose from 'mongoose'
 
-const { model, Schema } = mongoose
+const { model, Schema, Types } = mongoose
 
 const DOCUMENT_NAME = 'User'
 const COLLECTION_NAME = 'Users'
 
-enum Status {
+export enum UserStatus {
     ACTIVE = 'active',
     INACTIVE = 'inactive',
 }
 
-enum Role {
-    USER = 'user',
-    ADMIN = 'admin',
-}
-
-enum AuthType {
+export enum AuthType {
     EMAIL = 'email',
     GOOGLE = 'google',
     FACEBOOK = 'facebook',
 }
 
 const userAddressSchema = new Schema({
-    address: {
+    Address: {
         type: String,
     },
     province: {
@@ -53,21 +48,31 @@ const userSchema = new Schema(
         },
         password: {
             type: String,
-            trim: true,
-            required: true,
-        },
-        name: {
-            type: String,
-            maxLength: 150,
+            default: null,
             trim: true,
         },
-        phone: {
+        lastName: {
             type: String,
+            default: null,
             trim: true,
-            maxLength: 10,
+        },
+        firstName: {
+            type: String,
+            default: null,
+            trim: true,
+        },
+        dob: {
+            type: Date,
+            default: null,
         },
         address: {
             type: userAddressSchema,
+            default: null,
+        },
+        phoneNumber: {
+            type: String,
+            trim: true,
+            maxLength: 10,
         },
         avatar: {
             type: String,
@@ -76,14 +81,8 @@ const userSchema = new Schema(
         },
         status: {
             type: String,
-            enum: Status,
-            default: Status.INACTIVE,
-            index: true,
-        },
-        role: {
-            type: String,
-            enum: Role,
-            default: Role.USER,
+            enum: UserStatus,
+            default: UserStatus.INACTIVE,
             index: true,
         },
         authType: {
@@ -91,6 +90,10 @@ const userSchema = new Schema(
             enum: AuthType,
             default: AuthType.EMAIL,
             index: true,
+        },
+        refreshToken: {
+            type: String,
+            default: null,
         },
     },
     {
