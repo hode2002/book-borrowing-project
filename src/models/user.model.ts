@@ -1,9 +1,19 @@
 import mongoose from 'mongoose'
 
-const { model, Schema, Types } = mongoose
+const { model, Schema } = mongoose
 
 const DOCUMENT_NAME = 'User'
 const COLLECTION_NAME = 'Users'
+
+export enum UserRoles {
+    EMPLOYEE = 'employee',
+    USER = 'user',
+}
+
+export enum EmployeePositions {
+    LIBRARIAN = 'librarian',
+    CUSTOMER_SERVICE = 'customer_service',
+}
 
 export enum UserStatus {
     ACTIVE = 'active',
@@ -14,6 +24,7 @@ export enum AuthType {
     EMAIL = 'email',
     GOOGLE = 'google',
     FACEBOOK = 'facebook',
+    EMPLOYEE_ID = 'employee_id',
 }
 
 const userAddressSchema = new Schema({
@@ -37,13 +48,24 @@ const userAddressSchema = new Schema({
     },
 })
 
+const employeeSchema = new Schema({
+    position: {
+        type: String,
+        default: EmployeePositions.LIBRARIAN,
+    },
+    id: {
+        type: String,
+        default: null,
+        index: true,
+        required: true,
+    },
+})
+
 const userSchema = new Schema(
     {
         email: {
             type: String,
             trim: true,
-            unique: true,
-            required: true,
             index: true,
         },
         password: {
@@ -93,6 +115,15 @@ const userSchema = new Schema(
         },
         refreshToken: {
             type: String,
+            default: null,
+        },
+        role: {
+            type: String,
+            default: UserRoles.USER,
+            index: true,
+        },
+        employee: {
+            type: employeeSchema,
             default: null,
         },
     },
