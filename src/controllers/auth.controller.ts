@@ -21,7 +21,7 @@ class AuthController {
         return new SuccessResponse({
             status: 'Success',
             code: StatusCodes.CREATED,
-            message: 'Send otp successfully',
+            message: 'Send otp success',
             data: await AuthService.register(req.body as { email: string }),
         }).send(res)
     }
@@ -30,7 +30,7 @@ class AuthController {
         return new SuccessResponse({
             status: 'Success',
             code: StatusCodes.OK,
-            message: 'Send otp successfully',
+            message: 'Send otp success',
             data: await AuthService.resendOtp(req.body as { email: string }),
         }).send(res)
     }
@@ -83,6 +83,46 @@ class AuthController {
             code: StatusCodes.OK,
             message: 'Logout Success',
             data: await AuthService.logout(req?.user as { email: string }),
+        }).send(res)
+    }
+
+    async createEmployeeAccount(req: Request, res: Response) {
+        return new SuccessResponse({
+            status: 'Success',
+            code: StatusCodes.OK,
+            message: 'Successfully Created Account For New Employee',
+            data: await AuthService.createEmployeeAccount(
+                req.body as {
+                    email: string
+                    firstName: string
+                    lastName: string
+                }
+            ),
+        }).send(res)
+    }
+
+    async deleteAccount(req: Request, res: Response) {
+        return new SuccessResponse({
+            status: 'Success',
+            code: StatusCodes.OK,
+            message: 'Successfully Deleted Account',
+            data: await AuthService.deleteAccount(
+                req.body as { email: string }
+            ),
+        }).send(res)
+    }
+
+    async setRole(req: Request, res: Response) {
+        return new SuccessResponse({
+            status: 'Success',
+            code: StatusCodes.OK,
+            message: 'Set role for employee Success',
+            data: await AuthService.setRole(
+                req.body as {
+                    email: string
+                    positionName: string
+                }
+            ),
         }).send(res)
     }
 }

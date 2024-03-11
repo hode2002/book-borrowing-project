@@ -1,14 +1,16 @@
 import axios from 'axios'
 import jwt from 'jsonwebtoken'
 import * as otpGenerator from 'otp-generator'
+import * as passwordGenerator from 'generate-password'
 import * as bcrypt from 'bcrypt'
 import nodemailer from 'nodemailer'
 import { StatusCodes } from 'http-status-codes'
 import Queue from 'bull'
+import { v4 as uuidV4 } from 'uuid'
 
 import { ApiError } from '../utils'
 import { UserModel, OtpModel } from '../models'
-import { UserStatus } from '../models/user.model'
+import { AuthType, UserStatus } from '../models/user.model'
 import {
     EmailVerificationInterface,
     UserJwtPayload,
@@ -93,6 +95,10 @@ class AuthService {
     }
 
     async resendOtp({ email }: { email: string }) {
+        const user = await UserModel.findOne({ email })
+        if (!user) {
+            throw new ApiError(StatusCodes.NOT_FOUND, `User not found`)
+        }
         return await this.sendOtp(email)
     }
 
@@ -140,7 +146,10 @@ class AuthService {
 
         await mailQueue.add({ email, otpCode })
 
-        return { email }
+        return {
+            is_success: true,
+            email,
+        }
     }
 
     async verifyOtp(email: string, otpCode: string) {
@@ -202,7 +211,9 @@ class AuthService {
 
     async login({ email, password }: { email: string; password: string }) {
         const user = await UserModel.findOne({ email })
-            .select('_id email password avatar lastName firstName dob address')
+            .select(
+                '_id email password avatar lastName firstName dob address role'
+            )
             .lean()
 
         if (!user) {
@@ -223,6 +234,7 @@ class AuthService {
         const tokens = this.createTokenPairs({
             email,
             userId: user._id.toString(),
+            role: user.role,
         })
 
         const isUpdated = await UserModel.updateOne(
@@ -245,8 +257,8 @@ class AuthService {
         }
     }
 
-    async refreshToken({ email, userId }: UserJwtPayload) {
-        const tokens = this.createTokenPairs({ email, userId })
+    async refreshToken({ email, userId, role }: UserJwtPayload) {
+        const tokens = this.createTokenPairs({ email, userId, role })
 
         const isUpdated = await UserModel.updateOne(
             { email },
@@ -285,9 +297,153 @@ class AuthService {
         }
     }
 
-    private createTokenPairs({ email, userId }: UserJwtPayload) {
+    async createEmployeeAccount({
+        email,
+        firstName,
+        lastName,
+    }: {
+        email: string
+        firstName: string
+        lastName: string
+    }) {
+        if (!firstName) {
+            throw new ApiError(StatusCodes.BAD_REQUEST, `First name missing`)
+        }
+
+        const isExist = await UserModel.findOne({ email }).lean()
+        if (isExist) {
+            throw new ApiError(StatusCodes.CONFLICT, 'Email already exists')
+        }
+
+        const password = passwordGenerator.generate({
+            length: 10,
+            lowercase: true,
+            uppercase: true,
+            numbers: true,
+        })
+        if (!password) {
+            throw new ApiError(
+                StatusCodes.UNPROCESSABLE_ENTITY,
+                `Can't create password`
+            )
+        }
+
+        const hashPassword = await bcrypt.hash(password, 10)
+        if (!hashPassword) {
+            throw new ApiError(
+                StatusCodes.UNPROCESSABLE_ENTITY,
+                `Can't hash password`
+            )
+        }
+
+        const created = await UserModel.create({
+            email,
+            firstName,
+            lastName,
+            employee: {
+                id: uuidV4(),
+            },
+            status: 'active',
+            role: 'employee',
+            password: hashPassword,
+            authType: AuthType.EMPLOYEE_ID,
+        })
+
+        if (!created) {
+            throw new ApiError(
+                StatusCodes.UNPROCESSABLE_ENTITY,
+                `Can't create new employee account`
+            )
+        }
+
+        return {
+            is_success: true,
+            employee: {
+                id: created.employee.id,
+                email: created.email,
+                password,
+                firstName: created.firstName,
+                lastName: created.lastName,
+                role: created.role,
+                position: created.employee.position,
+            },
+        }
+    }
+
+    async deleteAccount({ email }: { email: string }) {
+        if (!email) {
+            throw new ApiError(StatusCodes.BAD_REQUEST, `Email missing`)
+        }
+
+        const isDeleted = await UserModel.findOneAndDelete({ email }).lean()
+
+        if (!isDeleted) {
+            throw new ApiError(
+                StatusCodes.UNPROCESSABLE_ENTITY,
+                `Can't delete this account`
+            )
+        }
+
+        return {
+            is_success: true,
+            ...isDeleted,
+        }
+    }
+
+    async setRole({
+        email,
+        positionName,
+    }: {
+        email: string
+        positionName: string
+    }) {
+        if (!email) {
+            throw new ApiError(
+                StatusCodes.BAD_REQUEST,
+                'Employee email missing'
+            )
+        }
+
+        if (!positionName) {
+            throw new ApiError(
+                StatusCodes.BAD_REQUEST,
+                'Employee position name missing'
+            )
+        }
+
+        const isUpdated = await UserModel.updateOne(
+            { email },
+            {
+                role: 'employee',
+                employee: {
+                    id: uuidV4(),
+                    position: positionName,
+                },
+            }
+        ).lean()
+
+        if (!isUpdated.modifiedCount) {
+            throw new ApiError(
+                StatusCodes.UNPROCESSABLE_ENTITY,
+                `Can't set role for employee`
+            )
+        }
+
+        const employee = await UserModel.findOne({ email })
+            .select(
+                '_id email avatar lastName firstName dob address role employeeId employeePosition'
+            )
+            .lean()
+
+        return {
+            is_success: true,
+            ...employee,
+        }
+    }
+
+    private createTokenPairs({ email, userId, role }: UserJwtPayload) {
         const accessToken = jwt.sign(
-            { email, userId },
+            { email, userId, role },
             process.env['ACCESS_TOKEN_SECRET'] as string,
             {
                 expiresIn: process.env['ACCESS_TOKEN_EXPIRES_IN'] as string,
@@ -295,7 +451,7 @@ class AuthService {
         )
 
         const refreshToken = jwt.sign(
-            { email, userId },
+            { email, userId, role },
             process.env['REFRESH_TOKEN_SECRET'] as string,
             {
                 expiresIn: process.env['REFRESH_TOKEN_EXPIRES_IN'] as string,
