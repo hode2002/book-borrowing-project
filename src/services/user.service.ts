@@ -21,7 +21,9 @@ class UserService {
             },
             {}
         )
-            .select('_id email avatar lastName firstName dob address')
+            .select(
+                '_id email avatar lastName firstName dob address role employee'
+            )
             .lean()
 
         if (!user) {
@@ -46,12 +48,26 @@ class UserService {
             throw new ApiError(StatusCodes.FORBIDDEN, 'User not found')
         }
 
-        return await UserModel.findOneAndUpdate(
+        const isUpdated = await UserModel.findOneAndUpdate(
             { email, status: UserStatus.ACTIVE },
             { address: { ...userAddress } }
         )
-            .select('_id email avatar lastName firstName dob address')
+            .select(
+                '_id email avatar lastName firstName dob address role employee'
+            )
             .lean()
+
+        if (!isUpdated) {
+            throw new ApiError(
+                StatusCodes.UNPROCESSABLE_ENTITY,
+                `Can't update user address`
+            )
+        }
+
+        return {
+            is_success: true,
+            ...isUpdated,
+        }
     }
 
     async forgotPassword({ email }: { email: string }) {
@@ -119,7 +135,9 @@ class UserService {
             email,
             status: UserStatus.ACTIVE,
         })
-            .select('_id email password avatar lastName firstName dob address')
+            .select(
+                '_id email password avatar lastName firstName dob address role employee'
+            )
             .lean()
 
         if (!user) {
@@ -133,12 +151,26 @@ class UserService {
 
         const hashPassword = await bcrypt.hash(newPassword, 10)
 
-        return await UserModel.findOneAndUpdate(
+        const isUpdated = await UserModel.findOneAndUpdate(
             { email, status: UserStatus.ACTIVE },
             { password: hashPassword }
         )
-            .select('_id email avatar lastName firstName dob address')
+            .select(
+                '_id email avatar lastName firstName dob address role employee'
+            )
             .lean()
+
+        if (!isUpdated) {
+            throw new ApiError(
+                StatusCodes.UNPROCESSABLE_ENTITY,
+                `Can't update password`
+            )
+        }
+
+        return {
+            is_success: true,
+            ...isUpdated,
+        }
     }
 }
 
