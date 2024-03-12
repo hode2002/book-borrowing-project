@@ -1,2 +1,5 @@
 export { default as UserModel } from './user.model'
 export { default as OtpModel } from './otp.model'
+export { default as BookModel } from './book.model'
+export { default as AuthorModel } from './author.model'
+export { default as PublisherModel } from './publisher.model'
