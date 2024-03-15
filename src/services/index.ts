@@ -1,5 +1,6 @@
 export { default as UserService } from './user.service'
 export { default as AuthService } from './auth.service'
 export { default as BookService } from './book.service'
+export { default as BorrowingService } from './borrowing.service'
 export { default as AuthorService } from './author.service'
 export { default as PublisherService } from './publisher.service'
