@@ -637,9 +637,6 @@ class BorrowingService {
         status: String
     }) {
         const currentDate = new Date()
-        console.log(dueDate)
-        console.log(currentDate)
-        console.log(moment(dueDate).isBefore(currentDate))
 
         if (moment(dueDate).isBefore(currentDate)) {
             console.log('1')
