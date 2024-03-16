@@ -1,33 +1,38 @@
-import express, { Request, Response } from 'express'
+import express from 'express'
 import passport from 'passport'
 
 import { UserController } from '../controllers'
 import { asyncHandler } from '../utils'
+import { IsLibrarian } from '../common/middlewares'
 
 const router = express.Router()
 
+router.post(
+    '/',
+    passport.authenticate('jwt', { session: false }),
+    IsLibrarian,
+    asyncHandler(UserController.createProfile)
+)
+
 router.get(
-    '/profile',
+    '/',
     passport.authenticate('jwt', { session: false }),
-    asyncHandler(UserController.getProfile)
+    IsLibrarian,
+    asyncHandler(UserController.getProfiles)
 )
 
-router.patch(
-    '/update-address',
+router.get(
+    '/:id',
     passport.authenticate('jwt', { session: false }),
-    asyncHandler(UserController.updateAddress)
+    IsLibrarian,
+    asyncHandler(UserController.getProfileById)
 )
 
-router.patch(
-    '/forgot-password',
+router.get(
+    '/phone/:number',
     passport.authenticate('jwt', { session: false }),
-    asyncHandler(UserController.forgotPassword)
-)
-
-router.patch(
-    '/change-password',
-    passport.authenticate('jwt', { session: false }),
-    asyncHandler(UserController.changePassword)
+    IsLibrarian,
+    asyncHandler(UserController.getProfileByPhoneNumber)
 )
 
 export default router
