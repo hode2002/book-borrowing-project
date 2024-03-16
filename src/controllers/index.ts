@@ -1,3 +1,4 @@
+export { default as EmployeeController } from './employee.controller'
 export { default as UserController } from './user.controller'
 export { default as AuthController } from './auth.controller'
 export { default as BookController } from './book.controller'

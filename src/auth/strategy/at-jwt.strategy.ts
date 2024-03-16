@@ -1,6 +1,6 @@
 import { PassportStatic } from 'passport'
 import { Strategy, ExtractJwt } from 'passport-jwt'
-import { UserJwtPayload } from '../../common/interfaces'
+import { JwtPayload } from '../../common/interfaces'
 
 export class AtJwtStrategy {
     private readonly passport: PassportStatic
@@ -17,7 +17,7 @@ export class AtJwtStrategy {
                     jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
                     secretOrKey: <string>process.env['ACCESS_TOKEN_SECRET'],
                 },
-                (payload: UserJwtPayload, done: Function) => {
+                (payload: JwtPayload, done: Function) => {
                     return done(null, payload)
                 }
             )

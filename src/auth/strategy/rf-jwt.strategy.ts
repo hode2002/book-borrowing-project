@@ -3,9 +3,9 @@ import { Strategy, ExtractJwt } from 'passport-jwt'
 import { Request } from 'express'
 import * as bcrypt from 'bcrypt'
 
+import { JwtPayload } from '../../common/interfaces'
+import { EmployeeModel } from '../../models'
 import { ApiError } from '../../utils'
-import { UserJwtPayload } from '../../common/interfaces'
-import { UserModel } from '../../models'
 
 export class RfJwtStrategy {
     private readonly passport: PassportStatic
@@ -23,11 +23,7 @@ export class RfJwtStrategy {
                     secretOrKey: <string>process.env['REFRESH_TOKEN_SECRET'],
                     passReqToCallback: true,
                 },
-                async (
-                    req: Request,
-                    payload: UserJwtPayload,
-                    done: Function
-                ) => {
+                async (req: Request, payload: JwtPayload, done: Function) => {
                     const refreshToken = <string>(
                         req?.headers['authorization']
                             ?.toString()
@@ -39,15 +35,15 @@ export class RfJwtStrategy {
                         throw new ApiError(403, 'Access denied')
                     }
 
-                    const user = await UserModel.findOne({
-                        _id: payload.userId,
+                    const employee = await EmployeeModel.findOne({
+                        _id: payload.id,
                     }).lean()
 
-                    if (!user) {
-                        throw new ApiError(404, 'User not found')
+                    if (!employee) {
+                        throw new ApiError(404, 'Employee not found')
                     }
 
-                    const hashRf = <string>user?.refreshToken
+                    const hashRf = <string>employee?.refreshToken
 
                     const isMatches = await bcrypt.compare(refreshToken, hashRf)
                     if (!isMatches) {

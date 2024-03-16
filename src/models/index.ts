@@ -1,3 +1,4 @@
+export { default as EmployeeModel } from './employee.model'
 export { default as UserModel } from './user.model'
 export { default as OtpModel } from './otp.model'
 export { default as BookModel } from './book.model'
