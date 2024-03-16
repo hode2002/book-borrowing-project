@@ -6,13 +6,9 @@ const DOCUMENT_NAME = 'TrackBookBorrowing'
 const COLLECTION_NAME = 'TrackBookBorrowings'
 
 export enum TrackBookBorrowingStatus {
-    PENDING = 'pending',
-    DELIVERY = 'delivery',
     RECEIVED = 'received',
-    REJECTED = 'rejected',
     RETURNED = 'returned',
     RENEWED = 'renewed',
-    CANCELLED = 'cancelled',
     OVERDUE = 'overdue',
     LOST = 'lost',
 }
@@ -41,7 +37,7 @@ const trackBookBorrowingSchema = new Schema(
         },
         status: {
             type: String,
-            default: TrackBookBorrowingStatus.PENDING,
+            default: TrackBookBorrowingStatus.RECEIVED,
         },
     },
     {
