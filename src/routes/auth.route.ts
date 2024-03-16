@@ -7,20 +7,24 @@ import { IsAdmin } from '../common/middlewares'
 
 const router = express.Router()
 
+router.post('/login', asyncHandler(AuthController.login))
+
+router.post('/otp/resend', asyncHandler(AuthController.resendOtp))
+
+router.post('/otp/verify', asyncHandler(AuthController.verifyOtp))
+
+router.post('/create-password', asyncHandler(AuthController.createPassword))
+
 router.post(
     '/email-verification',
     asyncHandler(AuthController.emailVerification)
 )
 
-router.post('/register', asyncHandler(AuthController.register))
-
-router.post('/otp/resend', asyncHandler(AuthController.resendOtp))
-
-router.post('/active-user-email', asyncHandler(AuthController.activeUserEmail))
-
-router.post('/create-password', asyncHandler(AuthController.createPassword))
-
-router.post('/login', asyncHandler(AuthController.login))
+router.post(
+    '/token/refresh',
+    passport.authenticate('jwt-refresh', { session: false }),
+    asyncHandler(AuthController.refreshToken)
+)
 
 router.post(
     '/logout',
@@ -43,16 +47,17 @@ router.delete(
 )
 
 router.post(
+    '/admin/restore-account',
+    passport.authenticate('jwt', { session: false }),
+    IsAdmin,
+    asyncHandler(AuthController.restoreAccount)
+)
+
+router.post(
     '/admin/set-role',
     passport.authenticate('jwt', { session: false }),
     IsAdmin,
     asyncHandler(AuthController.setRole)
-)
-
-router.post(
-    '/token/refresh',
-    passport.authenticate('jwt-refresh', { session: false }),
-    asyncHandler(AuthController.refreshToken)
 )
 
 export default router

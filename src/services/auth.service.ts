@@ -9,13 +9,9 @@ import Queue from 'bull'
 import { v4 as uuidV4 } from 'uuid'
 
 import { ApiError } from '../utils'
-import { UserModel, OtpModel } from '../models'
-import { AuthType, UserStatus } from '../models/user.model'
-import {
-    EmailVerificationInterface,
-    UserJwtPayload,
-    UserResponse,
-} from '../common/interfaces'
+import { UserModel, OtpModel, EmployeeModel } from '../models'
+import { EmployeeRoles, EmployeeStatus } from '../models/employee.model'
+import { EmailVerificationInterface, JwtPayload } from '../common/interfaces'
 
 class AuthService {
     async emailVerification({ email }: { email: string }) {
@@ -36,78 +32,28 @@ class AuthService {
         }
     }
 
-    async register({ email }: { email: string }) {
-        if (!email) {
-            throw new ApiError(StatusCodes.BAD_REQUEST, 'Email missing')
-        }
-
-        const isExist = await UserModel.findOne({ email })
-            .select('_id email avatar lastName firstName dob address')
-            .lean()
-
-        if (isExist) {
-            throw new ApiError(StatusCodes.CONFLICT, 'Email already exists')
-        }
-
-        const isCreated = await UserModel.create({ email })
-        if (!isCreated) {
-            throw new ApiError(
-                StatusCodes.UNPROCESSABLE_ENTITY,
-                `Can't create user email`
-            )
-        }
-
-        return await this.sendOtp(email)
-    }
-
-    async activeUserEmail({
-        email,
-        otpCode,
-    }: {
-        email: string
-        otpCode: string
-    }) {
-        const isVerified = await this.verifyOtp(email, otpCode)
-        if (!isVerified) {
-            throw new ApiError(StatusCodes.FORBIDDEN, 'Invalid email')
-        }
-
-        const userUpdated = <UserResponse>(
-            await UserModel.findOneAndUpdate(
-                { email, status: UserStatus.INACTIVE, password: null },
-                { status: UserStatus.ACTIVE }
-            )
-                .select('_id email avatar lastName firstName dob address')
-                .lean()
-        )
-
-        if (!userUpdated) {
-            throw new ApiError(
-                StatusCodes.UNPROCESSABLE_ENTITY,
-                `Can't active user`
-            )
-        }
-
-        return {
-            is_success: userUpdated ? true : false,
-            ...userUpdated,
-        }
-    }
-
     async resendOtp({ email }: { email: string }) {
         const user = await UserModel.findOne({ email })
         if (!user) {
             throw new ApiError(StatusCodes.NOT_FOUND, `User not found`)
         }
-        return await this.sendOtp(email)
+        return await this.sendOtp({ email })
     }
 
-    async sendOtp(email: string) {
+    async sendOtp({
+        email,
+        subject = 'Mã xác thực OTP',
+        msg = 'Mã OTP của bạn là:',
+    }: {
+        email: string
+        subject?: string
+        msg?: string
+    }) {
         const otpCode = otpGenerator.generate(6, {
             specialChars: false,
             digits: true,
-            upperCaseAlphabets: true,
-            lowerCaseAlphabets: true,
+            upperCaseAlphabets: false,
+            lowerCaseAlphabets: false,
         })
 
         if (!otpCode) {
@@ -136,10 +82,9 @@ class AuthService {
             await transporter.sendMail({
                 from: `"No Reply" <${process.env['MAIL_FROM']}>`,
                 to: job.data.email,
-                subject: 'Mã xác thực OTP',
-                html: `
-                CT449-Project Quản Lý Mượn Sách<br></br>
-                Mã OTP của bạn là: <b>${job.data.otpCode}</b>`,
+                subject,
+                html: `CT449-Project Quản Lý Mượn Sách<br></br>
+                ${msg} <b>${job.data.otpCode}</b>`,
             })
             done()
         })
@@ -148,11 +93,10 @@ class AuthService {
 
         return {
             is_success: true,
-            email,
         }
     }
 
-    async verifyOtp(email: string, otpCode: string) {
+    async verifyOtp({ email, otpCode }: { email: string; otpCode: string }) {
         const otps = await OtpModel.find({ email }).lean()
         if (!otps.length) {
             throw new ApiError(
@@ -185,60 +129,95 @@ class AuthService {
         email: string
         password: string
     }) {
-        const isExist = await UserModel.findOne({
+        if (!email) {
+            throw new ApiError(StatusCodes.BAD_REQUEST, 'Email missing')
+        }
+
+        if (!password) {
+            throw new ApiError(StatusCodes.BAD_REQUEST, 'Password missing')
+        }
+
+        const isExist = await EmployeeModel.findOne({
             email,
-            password: null,
-            status: UserStatus.ACTIVE,
+            status: EmployeeStatus.ACTIVE,
         })
-            .select('_id email avatar lastName firstName dob address')
+            .select(
+                'id email lastName firstName dob address phoneNumber avatar status role'
+            )
             .lean()
 
         if (!isExist) {
-            throw new ApiError(StatusCodes.FORBIDDEN, 'Access denied')
+            throw new ApiError(StatusCodes.NOT_FOUND, 'Employee not found')
         }
 
-        const hashPass = await bcrypt.hash(password, 10)
+        const hashPassword = await bcrypt.hash(password, 10)
+        if (!hashPassword) {
+            throw new ApiError(
+                StatusCodes.UNPROCESSABLE_ENTITY,
+                `Can't create new password`
+            )
+        }
 
-        const isSuccess = await UserModel.updateOne(
-            { email },
-            { password: hashPass }
+        const employee = await EmployeeModel.findOneAndUpdate(
+            { email, status: EmployeeStatus.ACTIVE },
+            { password: hashPassword }
         )
+            .select(
+                'id email lastName firstName dob address phoneNumber avatar status role'
+            )
+            .lean()
+
+        if (!employee) {
+            throw new ApiError(
+                StatusCodes.UNPROCESSABLE_ENTITY,
+                `Can't update password`
+            )
+        }
 
         return {
-            is_success: isSuccess?.modifiedCount ? true : false,
+            is_success: true,
+            ...employee,
         }
     }
 
     async login({ email, password }: { email: string; password: string }) {
-        const user = await UserModel.findOne({ email })
+        const employee = await EmployeeModel.findOne({
+            email,
+            status: EmployeeStatus.ACTIVE,
+        })
             .select(
-                '_id email password avatar lastName firstName dob address role'
+                'id email password lastName firstName dob address phoneNumber avatar status role'
             )
             .lean()
 
-        if (!user) {
+        if (!employee) {
+            throw new ApiError(
+                StatusCodes.NOT_FOUND,
+                'Incorrect Email or Password'
+            )
+        } else if (employee.status === EmployeeStatus.INACTIVE) {
             throw new ApiError(
                 StatusCodes.FORBIDDEN,
-                'Incorrect Email or Password'
+                'Your account has been locked, please contact the administrator'
             )
         }
 
-        const isMatches = await bcrypt.compare(password, user.password)
+        const isMatches = await bcrypt.compare(password, employee.password)
         if (!isMatches) {
             throw new ApiError(
-                StatusCodes.FORBIDDEN,
+                StatusCodes.NOT_FOUND,
                 'Incorrect Email or Password'
             )
         }
 
         const tokens = this.createTokenPairs({
             email,
-            userId: user._id.toString(),
-            role: user.role,
+            id: employee._id.toString(),
+            role: employee.role,
         })
 
-        const isUpdated = await UserModel.updateOne(
-            { email },
+        const isUpdated = await EmployeeModel.updateOne(
+            { email, status: EmployeeStatus.ACTIVE },
             {
                 refreshToken: await bcrypt.hash(tokens.refreshToken, 10),
             }
@@ -257,11 +236,11 @@ class AuthService {
         }
     }
 
-    async refreshToken({ email, userId, role }: UserJwtPayload) {
-        const tokens = this.createTokenPairs({ email, userId, role })
+    async refreshToken({ email, id, role }: JwtPayload) {
+        const tokens = this.createTokenPairs({ email, id, role })
 
-        const isUpdated = await UserModel.updateOne(
-            { email },
+        const isUpdated = await EmployeeModel.updateOne(
+            { email, status: EmployeeStatus.ACTIVE },
             {
                 refresh_token: await bcrypt.hash(tokens.refreshToken, 10),
             }
@@ -278,8 +257,8 @@ class AuthService {
     }
 
     async logout({ email }: { email: string }) {
-        const isUpdated = await UserModel.findOneAndUpdate(
-            { email },
+        const isUpdated = await EmployeeModel.findOneAndUpdate(
+            { email, status: EmployeeStatus.ACTIVE },
             { refreshToken: null }
         )
             .select('_id email avatar lastName firstName dob address')
@@ -301,26 +280,32 @@ class AuthService {
         email,
         firstName,
         lastName,
+        phoneNumber,
     }: {
         email: string
         firstName: string
         lastName: string
+        phoneNumber: string
     }) {
         if (!firstName) {
             throw new ApiError(StatusCodes.BAD_REQUEST, `First name missing`)
         }
 
-        const isExist = await UserModel.findOne({ email }).lean()
+        const isExist = await EmployeeModel.findOne({
+            email,
+            status: EmployeeStatus.ACTIVE,
+        }).lean()
         if (isExist) {
             throw new ApiError(StatusCodes.CONFLICT, 'Email already exists')
         }
 
         const password = passwordGenerator.generate({
-            length: 10,
+            length: 8,
             lowercase: true,
             uppercase: true,
             numbers: true,
         })
+
         if (!password) {
             throw new ApiError(
                 StatusCodes.UNPROCESSABLE_ENTITY,
@@ -336,20 +321,15 @@ class AuthService {
             )
         }
 
-        const created = await UserModel.create({
+        const employee = await EmployeeModel.create({
             email,
             firstName,
             lastName,
-            employee: {
-                id: uuidV4(),
-            },
-            status: 'active',
-            role: 'employee',
             password: hashPassword,
-            authType: AuthType.EMPLOYEE_ID,
+            phoneNumber,
         })
 
-        if (!created) {
+        if (!employee) {
             throw new ApiError(
                 StatusCodes.UNPROCESSABLE_ENTITY,
                 `Can't create new employee account`
@@ -359,13 +339,12 @@ class AuthService {
         return {
             is_success: true,
             employee: {
-                id: created.employee.id,
-                email: created.email,
+                email,
                 password,
-                firstName: created.firstName,
-                lastName: created.lastName,
-                role: created.role,
-                position: created.employee.position,
+                firstName,
+                lastName,
+                role: employee.role,
+                phoneNumber,
             },
         }
     }
@@ -375,9 +354,17 @@ class AuthService {
             throw new ApiError(StatusCodes.BAD_REQUEST, `Email missing`)
         }
 
-        const isDeleted = await UserModel.findOneAndDelete({ email }).lean()
+        const isUpdated = await EmployeeModel.findOneAndUpdate(
+            { email, status: EmployeeStatus.ACTIVE },
+            { status: EmployeeStatus.INACTIVE },
+            { new: true }
+        )
+            .select(
+                'id email lastName firstName dob address phoneNumber avatar status role'
+            )
+            .lean()
 
-        if (!isDeleted) {
+        if (!isUpdated) {
             throw new ApiError(
                 StatusCodes.UNPROCESSABLE_ENTITY,
                 `Can't delete this account`
@@ -386,64 +373,82 @@ class AuthService {
 
         return {
             is_success: true,
-            ...isDeleted,
+            ...isUpdated,
         }
     }
 
-    async setRole({
-        email,
-        positionName,
-    }: {
-        email: string
-        positionName: string
-    }) {
+    async restoreAccount({ email }: { email: string }) {
         if (!email) {
+            throw new ApiError(StatusCodes.BAD_REQUEST, `Email missing`)
+        }
+
+        const isUpdated = await EmployeeModel.findOneAndUpdate(
+            { email, status: EmployeeStatus.INACTIVE },
+            { status: EmployeeStatus.ACTIVE },
+            { new: true }
+        )
+            .select(
+                'id email lastName firstName dob address phoneNumber avatar status role'
+            )
+            .lean()
+
+        if (!isUpdated) {
             throw new ApiError(
-                StatusCodes.BAD_REQUEST,
-                'Employee email missing'
+                StatusCodes.UNPROCESSABLE_ENTITY,
+                `Can't restore this account`
             )
         }
 
-        if (!positionName) {
-            throw new ApiError(
-                StatusCodes.BAD_REQUEST,
-                'Employee position name missing'
-            )
+        return {
+            is_success: true,
+            ...isUpdated,
+        }
+    }
+
+    async setRole({ email, role }: { email: string; role: string }) {
+        if (!email) {
+            throw new ApiError(StatusCodes.BAD_REQUEST, 'Missing email')
         }
 
-        const isUpdated = await UserModel.updateOne(
-            { email },
-            {
-                role: 'employee',
-                employee: {
-                    id: uuidV4(),
-                    position: positionName,
-                },
-            }
-        ).lean()
+        if (!role) {
+            throw new ApiError(StatusCodes.BAD_REQUEST, 'Missing role')
+        }
 
-        if (!isUpdated.modifiedCount) {
+        const employee = await EmployeeModel.findOne({
+            email,
+            status: EmployeeStatus.ACTIVE,
+        })
+            .select(
+                'id email lastName firstName dob address phoneNumber avatar status role'
+            )
+            .lean()
+
+        const isUpdated = await EmployeeModel.findOneAndUpdate(
+            { email, status: EmployeeStatus.ACTIVE },
+            { role },
+            { new: true }
+        )
+            .select(
+                'id email lastName firstName dob address phoneNumber avatar status role'
+            )
+            .lean()
+
+        if (!isUpdated) {
             throw new ApiError(
                 StatusCodes.UNPROCESSABLE_ENTITY,
                 `Can't set role for employee`
             )
         }
 
-        const employee = await UserModel.findOne({ email })
-            .select(
-                '_id email avatar lastName firstName dob address role employeeId employeePosition'
-            )
-            .lean()
-
         return {
             is_success: true,
-            ...employee,
+            ...isUpdated,
         }
     }
 
-    private createTokenPairs({ email, userId, role }: UserJwtPayload) {
+    private createTokenPairs({ email, id, role }: JwtPayload) {
         const accessToken = jwt.sign(
-            { email, userId, role },
+            { email, id, role },
             process.env['ACCESS_TOKEN_SECRET'] as string,
             {
                 expiresIn: process.env['ACCESS_TOKEN_EXPIRES_IN'] as string,
@@ -451,7 +456,7 @@ class AuthService {
         )
 
         const refreshToken = jwt.sign(
-            { email, userId, role },
+            { email, id, role },
             process.env['REFRESH_TOKEN_SECRET'] as string,
             {
                 expiresIn: process.env['REFRESH_TOKEN_EXPIRES_IN'] as string,
