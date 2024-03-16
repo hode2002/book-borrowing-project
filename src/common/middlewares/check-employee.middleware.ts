@@ -1,7 +1,8 @@
 import { NextFunction, Request, Response } from 'express'
 import { StatusCodes } from 'http-status-codes'
 
-import { UserJwtPayload } from '../interfaces'
+import { EmployeeRoles } from '../../models/employee.model'
+import { JwtPayload } from '../interfaces'
 import { ApiError } from '../../utils'
 
 export const IsLibrarian = (
@@ -9,8 +10,8 @@ export const IsLibrarian = (
     res: Response,
     next: NextFunction
 ) => {
-    const { role } = req.user as UserJwtPayload
-    if (role !== 'admin' && role !== 'librarian') {
+    const { role } = req.user as JwtPayload
+    if (role !== EmployeeRoles.ADMIN && role !== EmployeeRoles.LIBRARIAN) {
         throw new ApiError(
             StatusCodes.FORBIDDEN,
             'You must be an admin or librarian'
