@@ -5,22 +5,19 @@ import moment from 'moment'
 import { BookModel, BorrowingModel } from '../models'
 import { ApiError } from '../utils'
 import {
-    CreateBorrowingInterface,
+    CreateBookBorrowing,
     UpdateBorrowingInterface,
 } from '../common/interfaces'
 import { TrackBookBorrowingStatus } from '../models/track-book-borrowing.model'
 import userModel from '../models/user.model'
 
 class BorrowingService {
-    async create(
-        { userId }: { userId: string },
-        createBorrowing: CreateBorrowingInterface
-    ) {
-        if (!userId) {
+    async create(createBorrowing: CreateBookBorrowing) {
+        if (!createBorrowing?.userId) {
             throw new ApiError(StatusCodes.BAD_REQUEST, 'Missing user id')
         }
 
-        if (!isValidObjectId(userId)) {
+        if (!isValidObjectId(createBorrowing?.userId)) {
             throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid user id')
         }
 
@@ -36,34 +33,21 @@ class BorrowingService {
             )
         }
 
-        const user = await userModel.findOne({ _id: userId }).lean()
+        const user = await userModel
+            .findOne({ _id: createBorrowing.userId })
+            .lean()
         if (!user) {
             throw new ApiError(StatusCodes.NOT_FOUND, 'User not found')
-        } else if (!user?.address) {
-            throw new ApiError(
-                StatusCodes.FORBIDDEN,
-                'Please update your address before borrowing books.'
-            )
         }
 
-        const isExist = await BorrowingModel.findOne({
-            userId,
+        const result = await BorrowingModel.find({
+            userId: createBorrowing.userId,
             bookId: createBorrowing.bookId,
             borrowDate: createBorrowing.borrowDate,
-            status: { $nin: [TrackBookBorrowingStatus.CANCELLED] },
-        })
-            .populate({
-                path: 'userId',
-                select: '_id email name avatar address phoneNumber',
-            })
-            .populate({
-                path: 'bookId',
-                select: '_id name price thumbnail slug',
-            })
-            .select('_id userId bookId quantity borrowDate dueDate status')
-            .lean()
+            status: TrackBookBorrowingStatus.RECEIVED,
+        }).lean()
 
-        if (isExist) {
+        if (result?.length) {
             throw new ApiError(
                 StatusCodes.CONFLICT,
                 `You can't borrow the same book twice in 1 day`
@@ -81,8 +65,8 @@ class BorrowingService {
             )
         }
 
-        const { _id, bookId, quantity, borrowDate, dueDate, status } =
-            await BorrowingModel.create({ ...createBorrowing, userId })
+        const { _id, userId, bookId, quantity, borrowDate, dueDate, status } =
+            await BorrowingModel.create({ ...createBorrowing })
 
         if (!_id) {
             throw new ApiError(
@@ -91,10 +75,23 @@ class BorrowingService {
             )
         }
 
+        const isQuantityUpdated = await BookModel.updateOne(
+            { _id: createBorrowing.bookId },
+            { quantity: book!.quantity - createBorrowing.quantity }
+        )
+
+        if (!isQuantityUpdated) {
+            throw new ApiError(
+                StatusCodes.UNPROCESSABLE_ENTITY,
+                `Can't update book quantity`
+            )
+        }
+
         return {
             is_success: true,
             trackingInfo: {
                 _id,
+                userId,
                 bookId,
                 quantity,
                 borrowDate,
@@ -108,7 +105,7 @@ class BorrowingService {
         const booksHasBorrowed = await BorrowingModel.find()
             .populate({
                 path: 'userId',
-                select: '_id email name avatar address phoneNumber',
+                select: '-status -createdAt -updatedAt -__v',
             })
             .populate({
                 path: 'bookId',
@@ -131,23 +128,19 @@ class BorrowingService {
         return await Promise.all(booksHasBorrowedPromises)
     }
 
-    async getById({ id }: { id: string }, { userId }: { userId: string }) {
+    async getById({ id }: { id: string }) {
         if (!id) {
             throw new ApiError(StatusCodes.BAD_REQUEST, 'Missing borrowing id')
-        }
-
-        if (!userId) {
-            throw new ApiError(StatusCodes.BAD_REQUEST, 'Missing user id')
         }
 
         if (!isValidObjectId(id)) {
             throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid borrowing id')
         }
 
-        const trackingInfo = await BorrowingModel.findOne({ _id: id, userId })
+        const trackingInfo = await BorrowingModel.findOne({ _id: id })
             .populate({
                 path: 'userId',
-                select: '_id email name avatar address phoneNumber',
+                select: '-status -createdAt -updatedAt -__v',
             })
             .populate({
                 path: 'bookId',
@@ -157,10 +150,7 @@ class BorrowingService {
             .lean()
 
         if (!trackingInfo) {
-            throw new ApiError(
-                StatusCodes.NOT_FOUND,
-                'Borrowed books not found'
-            )
+            throw new ApiError(StatusCodes.NOT_FOUND, 'Borrowed book not found')
         }
 
         return {
@@ -184,7 +174,7 @@ class BorrowingService {
         const booksHasBorrowed = await BorrowingModel.find({ status })
             .populate({
                 path: 'userId',
-                select: '_id email name avatar address phoneNumber',
+                select: '-status -createdAt -updatedAt -__v',
             })
             .populate({
                 path: 'bookId',
@@ -219,7 +209,7 @@ class BorrowingService {
         const booksHasBorrowed = await BorrowingModel.find({ userId })
             .populate({
                 path: 'userId',
-                select: '_id email name avatar address phoneNumber',
+                select: '-status -createdAt -updatedAt -__v',
             })
             .populate({
                 path: 'bookId',
@@ -243,6 +233,14 @@ class BorrowingService {
     }
 
     async updateStatus({ id, status }: { id: string; status: string }) {
+        if (!id) {
+            throw new ApiError(StatusCodes.BAD_REQUEST, 'Missing borrowing id')
+        }
+
+        if (!isValidObjectId(id)) {
+            throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid borrowing id')
+        }
+
         if (!status) {
             throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid status')
         }
@@ -254,7 +252,7 @@ class BorrowingService {
         )
             .populate({
                 path: 'userId',
-                select: '_id email name avatar address phoneNumber',
+                select: '-status -createdAt -updatedAt -__v',
             })
             .populate({
                 path: 'bookId',
@@ -276,7 +274,7 @@ class BorrowingService {
         }
     }
 
-    async accept({ id }: { id: string }) {
+    async return({ id }: { id: string }) {
         if (!id) {
             throw new ApiError(StatusCodes.BAD_REQUEST, 'Missing borrowing id')
         }
@@ -287,79 +285,13 @@ class BorrowingService {
 
         const isExist = await BorrowingModel.findOne({
             _id: id,
-            status: TrackBookBorrowingStatus.PENDING,
-        }).lean()
-
-        if (!isExist) {
-            throw new ApiError(
-                StatusCodes.NOT_FOUND,
-                'Borrowed books not found'
-            )
-        }
-
-        const trackingInfo = await this.updateStatus({
-            id,
-            status: TrackBookBorrowingStatus.DELIVERY,
-        })
-
-        const book = await BookModel.findOne({ _id: trackingInfo.bookId })
-            .select('quantity')
-            .lean()
-
-        const isUpdatedQuantity = await BookModel.updateOne(
-            { _id: trackingInfo.bookId },
-            { quantity: book!.quantity - trackingInfo.quantity }
-        )
-
-        if (!isUpdatedQuantity) {
-            throw new ApiError(
-                StatusCodes.UNPROCESSABLE_ENTITY,
-                `Can't update book quantity`
-            )
-        }
-
-        return trackingInfo
-    }
-
-    async reject({ id }: { id: string }) {
-        if (!id) {
-            throw new ApiError(StatusCodes.BAD_REQUEST, 'Missing borrowing id')
-        }
-
-        if (!isValidObjectId(id)) {
-            throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid borrowing id')
-        }
-
-        const isExist = await BorrowingModel.findOne({
-            _id: id,
-            status: TrackBookBorrowingStatus.PENDING,
-        }).lean()
-
-        if (!isExist) {
-            throw new ApiError(
-                StatusCodes.NOT_FOUND,
-                'Borrowed books not found'
-            )
-        }
-
-        return await this.updateStatus({
-            id,
-            status: TrackBookBorrowingStatus.REJECTED,
-        })
-    }
-
-    async receive({ userId }: { userId: string }, { id }: { id: string }) {
-        if (!id) {
-            throw new ApiError(StatusCodes.BAD_REQUEST, 'Missing borrowing id')
-        }
-
-        if (!isValidObjectId(id)) {
-            throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid borrowing id')
-        }
-
-        const isExist = await BorrowingModel.findOne({
-            _id: id,
-            status: TrackBookBorrowingStatus.DELIVERY,
+            status: {
+                $in: [
+                    TrackBookBorrowingStatus.RECEIVED,
+                    TrackBookBorrowingStatus.RENEWED,
+                    TrackBookBorrowingStatus.OVERDUE,
+                ],
+            },
         })
             .select('userId')
             .lean()
@@ -369,45 +301,6 @@ class BorrowingService {
                 StatusCodes.NOT_FOUND,
                 'Borrowed books not found'
             )
-        }
-
-        if (isExist?.userId !== userId) {
-            throw new ApiError(StatusCodes.FORBIDDEN, 'Access denied')
-        }
-
-        const trackingInfo = await this.updateStatus({
-            id,
-            status: TrackBookBorrowingStatus.RECEIVED,
-        })
-
-        return trackingInfo
-    }
-
-    async return({ userId }: { userId: string }, { id }: { id: string }) {
-        if (!id) {
-            throw new ApiError(StatusCodes.BAD_REQUEST, 'Missing borrowing id')
-        }
-
-        if (!isValidObjectId(id)) {
-            throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid borrowing id')
-        }
-
-        const isExist = await BorrowingModel.findOne({
-            _id: id,
-            status: TrackBookBorrowingStatus.RECEIVED,
-        })
-            .select('userId')
-            .lean()
-
-        if (!isExist) {
-            throw new ApiError(
-                StatusCodes.NOT_FOUND,
-                'Borrowed books not found'
-            )
-        }
-
-        if (isExist?.userId !== userId) {
-            throw new ApiError(StatusCodes.FORBIDDEN, 'Access denied')
         }
 
         const trackingInfo = await this.updateStatus({
@@ -415,16 +308,15 @@ class BorrowingService {
             status: TrackBookBorrowingStatus.RETURNED,
         })
 
-        const book = await BookModel.findOne({ _id: trackingInfo.bookId })
-            .select('quantity')
-            .lean()
-
-        const isUpdatedQuantity = await BookModel.updateOne(
+        const isQuantityUpdated = await BookModel.findOneAndUpdate(
             { _id: trackingInfo.bookId },
-            { quantity: book!.quantity + trackingInfo.quantity }
+            { $inc: { quantity: trackingInfo.quantity } },
+            { new: true }
         )
 
-        if (!isUpdatedQuantity) {
+            .lean()
+
+        if (!isQuantityUpdated) {
             throw new ApiError(
                 StatusCodes.UNPROCESSABLE_ENTITY,
                 `Can't update book quantity`
@@ -435,7 +327,6 @@ class BorrowingService {
     }
 
     async renew(
-        { userId }: { userId: string },
         { id }: { id: string },
         { numberOfRenewalDays }: { numberOfRenewalDays: number }
     ) {
@@ -453,6 +344,7 @@ class BorrowingService {
                 $in: [
                     TrackBookBorrowingStatus.RECEIVED,
                     TrackBookBorrowingStatus.RENEWED,
+                    TrackBookBorrowingStatus.OVERDUE,
                 ],
             },
         })
@@ -464,10 +356,6 @@ class BorrowingService {
                 StatusCodes.NOT_FOUND,
                 'Borrowed books not found'
             )
-        }
-
-        if (isExist?.userId !== userId) {
-            throw new ApiError(StatusCodes.FORBIDDEN, 'Access denied')
         }
 
         const trackingInfo = await this.updateStatus({
@@ -486,7 +374,7 @@ class BorrowingService {
         )
             .populate({
                 path: 'userId',
-                select: '_id email name avatar address phoneNumber',
+                select: '-status -createdAt -updatedAt -__v',
             })
             .populate({
                 path: 'bookId',
@@ -505,125 +393,6 @@ class BorrowingService {
         return {
             is_success: true,
             trackingInfo: { ...isUpdatedDueDay },
-        }
-    }
-
-    async cancel({ userId }: { userId: string }, { id }: { id: string }) {
-        if (!id) {
-            throw new ApiError(StatusCodes.BAD_REQUEST, 'Missing borrowing id')
-        }
-
-        if (!isValidObjectId(id)) {
-            throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid borrowing id')
-        }
-
-        const isExist = await BorrowingModel.findOne({
-            _id: id,
-            status: {
-                $nin: [
-                    TrackBookBorrowingStatus.CANCELLED,
-                    TrackBookBorrowingStatus.DELIVERY,
-                ],
-            },
-        })
-            .select('userId')
-            .lean()
-
-        if (!isExist) {
-            throw new ApiError(
-                StatusCodes.NOT_FOUND,
-                'Borrowed books not found'
-            )
-        }
-
-        if (isExist?.userId !== userId) {
-            throw new ApiError(StatusCodes.FORBIDDEN, 'Access denied')
-        }
-
-        const trackingInfo = await this.updateStatus({
-            id,
-            status: TrackBookBorrowingStatus.CANCELLED,
-        })
-
-        const book = await BookModel.findOne({ _id: trackingInfo.bookId })
-            .select('quantity')
-            .lean()
-
-        const isUpdatedQuantity = await BookModel.updateOne(
-            { _id: trackingInfo.bookId },
-            { quantity: book!.quantity + trackingInfo.quantity }
-        )
-
-        if (!isUpdatedQuantity) {
-            throw new ApiError(
-                StatusCodes.UNPROCESSABLE_ENTITY,
-                `Can't update book quantity`
-            )
-        }
-
-        return trackingInfo
-    }
-
-    async updateById(
-        { id }: { id: string },
-        { userId }: { userId: string },
-        updateBorrowing: UpdateBorrowingInterface
-    ) {
-        if (!id) {
-            throw new ApiError(StatusCodes.BAD_REQUEST, 'Missing book id')
-        }
-
-        if (!isValidObjectId(id)) {
-            throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid book id')
-        }
-
-        if (!userId) {
-            throw new ApiError(StatusCodes.BAD_REQUEST, 'Missing user id')
-        }
-
-        if (!isValidObjectId(userId)) {
-            throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid user id')
-        }
-
-        const isExist = await BorrowingModel.findOne({ _id: id })
-            .select(
-                '_id name price quantity description publication_year thumbnail images publisherId authorId other_info'
-            )
-            .lean()
-
-        if (!isExist) {
-            throw new ApiError(
-                StatusCodes.NOT_FOUND,
-                'Borrowed books not found'
-            )
-        }
-
-        const isUpdated = await BorrowingModel.findOneAndUpdate(
-            { _id: id },
-            { ...updateBorrowing },
-            { new: true }
-        )
-            .populate({
-                path: 'userId',
-                select: '_id email name avatar address phoneNumber',
-            })
-            .populate({
-                path: 'bookId',
-                select: '_id name price thumbnail slug',
-            })
-            .select('_id userId bookId quantity borrowDate dueDate status')
-            .lean()
-
-        if (!isUpdated) {
-            throw new ApiError(
-                StatusCodes.UNPROCESSABLE_ENTITY,
-                `Unable to update book borrowing tracking`
-            )
-        }
-
-        return {
-            is_success: true,
-            trackingInfo: { ...isUpdated },
         }
     }
 

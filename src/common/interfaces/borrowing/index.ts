@@ -1,2 +1,2 @@
-export * from './create-borrowing.interface'
+export * from './create-book-borrowing.interface'
 export * from './update-borrowing.interface'

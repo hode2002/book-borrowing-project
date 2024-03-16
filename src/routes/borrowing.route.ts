@@ -17,6 +17,7 @@ router.get(
 router.post(
     '/',
     passport.authenticate('jwt', { session: false }),
+    IsLibrarian,
     asyncHandler(BorrowingController.create)
 )
 
@@ -30,56 +31,28 @@ router.get(
 router.get(
     '/:id',
     passport.authenticate('jwt', { session: false }),
+    IsLibrarian,
     asyncHandler(BorrowingController.getById)
 )
 
-router.patch(
-    '/:id',
-    passport.authenticate('jwt', { session: false }),
-    asyncHandler(BorrowingController.updateById)
-)
-
 router.get(
-    '/user/list',
+    '/users/:userId',
     passport.authenticate('jwt', { session: false }),
+    IsLibrarian,
     asyncHandler(BorrowingController.getByUserId)
-)
-
-router.patch(
-    '/:id/cancel',
-    passport.authenticate('jwt', { session: false }),
-    asyncHandler(BorrowingController.cancel)
-)
-
-router.patch(
-    '/:id/accept',
-    passport.authenticate('jwt', { session: false }),
-    IsLibrarian,
-    asyncHandler(BorrowingController.accept)
-)
-
-router.patch(
-    '/:id/reject',
-    passport.authenticate('jwt', { session: false }),
-    IsLibrarian,
-    asyncHandler(BorrowingController.reject)
-)
-
-router.patch(
-    '/:id/receive',
-    passport.authenticate('jwt', { session: false }),
-    asyncHandler(BorrowingController.receive)
 )
 
 router.patch(
     '/:id/return',
     passport.authenticate('jwt', { session: false }),
+    IsLibrarian,
     asyncHandler(BorrowingController.return)
 )
 
 router.patch(
     '/:id/renew',
     passport.authenticate('jwt', { session: false }),
+    IsLibrarian,
     asyncHandler(BorrowingController.renew)
 )
 
