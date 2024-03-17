@@ -2,10 +2,12 @@ import { PassportStatic } from 'passport'
 import { Strategy, ExtractJwt } from 'passport-jwt'
 import { Request } from 'express'
 import * as bcrypt from 'bcrypt'
+import { StatusCodes } from 'http-status-codes'
 
 import { JwtPayload } from '../../common/interfaces'
-import { EmployeeModel } from '../../models'
+import { EmployeeModel, UserModel } from '../../models'
 import { ApiError } from '../../utils'
+import { UserRoles } from '../../models/user.model'
 
 export class RfJwtStrategy {
     private readonly passport: PassportStatic
@@ -24,33 +26,69 @@ export class RfJwtStrategy {
                     passReqToCallback: true,
                 },
                 async (req: Request, payload: JwtPayload, done: Function) => {
-                    const refreshToken = <string>(
-                        req?.headers['authorization']
-                            ?.toString()
-                            .replace('Bearer', '')
-                            .trim()
-                    )
+                    try {
+                        const refreshToken = <string>(
+                            req?.headers['authorization']
+                                ?.toString()
+                                .replace('Bearer', '')
+                                .trim()
+                        )
 
-                    if (!refreshToken) {
-                        throw new ApiError(403, 'Access denied')
+                        if (!refreshToken) {
+                            throw new ApiError(
+                                StatusCodes.FORBIDDEN,
+                                'Access denied'
+                            )
+                        }
+
+                        let result
+                        if (payload.role === UserRoles.USER) {
+                            result = await UserModel.findOne({
+                                _id: payload.id,
+                            }).lean()
+
+                            if (!result) {
+                                throw new ApiError(
+                                    StatusCodes.NOT_FOUND,
+                                    `User not found`
+                                )
+                            }
+                        } else {
+                            result = await EmployeeModel.findOne({
+                                _id: payload.id,
+                            }).lean()
+
+                            if (!result) {
+                                throw new ApiError(
+                                    StatusCodes.NOT_FOUND,
+                                    'Employee not found'
+                                )
+                            }
+                        }
+
+                        const hashRf = <string>result?.refreshToken
+                        if (!hashRf) {
+                            throw new ApiError(
+                                StatusCodes.FORBIDDEN,
+                                'Access denied'
+                            )
+                        }
+
+                        const isMatches = await bcrypt.compare(
+                            refreshToken,
+                            hashRf
+                        )
+                        if (!isMatches) {
+                            throw new ApiError(
+                                StatusCodes.FORBIDDEN,
+                                'Access denied'
+                            )
+                        }
+
+                        return done(null, payload)
+                    } catch (error) {
+                        done(error)
                     }
-
-                    const employee = await EmployeeModel.findOne({
-                        _id: payload.id,
-                    }).lean()
-
-                    if (!employee) {
-                        throw new ApiError(404, 'Employee not found')
-                    }
-
-                    const hashRf = <string>employee?.refreshToken
-
-                    const isMatches = await bcrypt.compare(refreshToken, hashRf)
-                    if (!isMatches) {
-                        throw new ApiError(403, 'Access denied')
-                    }
-
-                    return done(null, payload)
                 }
             )
         )
