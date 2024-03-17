@@ -2,22 +2,18 @@ import { StatusCodes } from 'http-status-codes'
 import { isValidObjectId } from 'mongoose'
 import moment from 'moment'
 
-import { BookModel, BorrowingModel } from '../models'
+import { BookModel, BorrowingModel, UserModel } from '../models'
 import { ApiError } from '../utils'
-import {
-    CreateBookBorrowing,
-    UpdateBorrowingInterface,
-} from '../common/interfaces'
+import { CreateBookBorrowing } from '../common/interfaces'
 import { TrackBookBorrowingStatus } from '../models/track-book-borrowing.model'
-import userModel from '../models/user.model'
 
 class BorrowingService {
-    async create(createBorrowing: CreateBookBorrowing) {
-        if (!createBorrowing?.userId) {
+    async create({ id }: { id: string }, createBorrowing: CreateBookBorrowing) {
+        if (!id) {
             throw new ApiError(StatusCodes.BAD_REQUEST, 'Missing user id')
         }
 
-        if (!isValidObjectId(createBorrowing?.userId)) {
+        if (!isValidObjectId(id)) {
             throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid user id')
         }
 
@@ -33,18 +29,22 @@ class BorrowingService {
             )
         }
 
-        const user = await userModel
-            .findOne({ _id: createBorrowing.userId })
-            .lean()
+        if (createBorrowing.quantity > 2) {
+            throw new ApiError(
+                StatusCodes.FORBIDDEN,
+                'Quantity must be less than or equal 2'
+            )
+        }
+        const user = await UserModel.findOne({ _id: id }).lean()
         if (!user) {
             throw new ApiError(StatusCodes.NOT_FOUND, 'User not found')
         }
 
         const result = await BorrowingModel.find({
-            userId: createBorrowing.userId,
+            userId: id,
             bookId: createBorrowing.bookId,
             borrowDate: createBorrowing.borrowDate,
-            status: TrackBookBorrowingStatus.RECEIVED,
+            status: TrackBookBorrowingStatus.PENDING,
         }).lean()
 
         if (result?.length) {
@@ -66,7 +66,7 @@ class BorrowingService {
         }
 
         const { _id, userId, bookId, quantity, borrowDate, dueDate, status } =
-            await BorrowingModel.create({ ...createBorrowing })
+            await BorrowingModel.create({ ...createBorrowing, userId: id })
 
         if (!_id) {
             throw new ApiError(
@@ -101,8 +101,32 @@ class BorrowingService {
         }
     }
 
-    async getAll() {
-        const booksHasBorrowed = await BorrowingModel.find()
+    async accept(
+        { employeeId }: { employeeId: string },
+        { id }: { id: string }
+    ) {
+        if (!id) {
+            throw new ApiError(StatusCodes.BAD_REQUEST, 'Missing id')
+        }
+
+        if (!isValidObjectId(id)) {
+            throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid id')
+        }
+
+        const employee = await UserModel.findOne({ _id: employeeId })
+            .select('_id email firstName lastName phoneNumber')
+            .lean()
+        if (!employee) {
+            throw new ApiError(StatusCodes.NOT_FOUND, 'Employee not found')
+        }
+
+        const isUpdated = await BorrowingModel.findOneAndUpdate(
+            { _id: id },
+            {
+                status: TrackBookBorrowingStatus.RECEIVED,
+                acceptedBy: { ...employee },
+            }
+        )
             .populate({
                 path: 'userId',
                 select: '-status -createdAt -updatedAt -__v',
@@ -113,6 +137,112 @@ class BorrowingService {
             })
             .select('_id userId bookId quantity borrowDate dueDate status')
             .lean()
+
+        if (!isUpdated) {
+            throw new ApiError(
+                StatusCodes.UNPROCESSABLE_ENTITY,
+                `Can't update status`
+            )
+        }
+
+        return {
+            is_success: true,
+            ...isUpdated,
+        }
+    }
+
+    async adminGetAll() {
+        const booksHasBorrowed = await BorrowingModel.find()
+            .populate({
+                path: 'userId',
+                select: '-status -createdAt -updatedAt -__v',
+            })
+            .populate({
+                path: 'bookId',
+                select: '_id name price thumbnail slug',
+            })
+            .sort({ createdAt: 'desc' })
+            .select('_id userId bookId quantity borrowDate dueDate status')
+            .lean()
+
+        const booksHasBorrowedPromises = booksHasBorrowed.map(async (book) => {
+            return {
+                ...book,
+                status: await this.updateStatusBasedOnDueDay({
+                    _id: book._id.toString(),
+                    dueDate: book.dueDate,
+                    status: book.status,
+                }),
+            }
+        })
+
+        return await Promise.all(booksHasBorrowedPromises)
+    }
+
+    async adminGetById({ id }: { id: string }) {
+        if (!id) {
+            throw new ApiError(StatusCodes.BAD_REQUEST, 'Missing id')
+        }
+
+        if (!isValidObjectId(id)) {
+            throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid id')
+        }
+
+        const trackingInfo = await BorrowingModel.findOne({ _id: id })
+            .populate({
+                path: 'userId',
+                select: '-status -createdAt -updatedAt -__v',
+            })
+            .populate({
+                path: 'bookId',
+                select: '_id name price thumbnail slug',
+            })
+            .sort({})
+            .select('_id userId bookId quantity borrowDate dueDate status')
+            .lean()
+
+        if (!trackingInfo) {
+            throw new ApiError(StatusCodes.NOT_FOUND, 'Borrowed book not found')
+        }
+
+        return {
+            is_success: true,
+            trackingInfo: {
+                ...trackingInfo,
+                status: await this.updateStatusBasedOnDueDay({
+                    _id: id,
+                    dueDate: trackingInfo.dueDate,
+                    status: trackingInfo.status,
+                }),
+            },
+        }
+    }
+
+    async adminGetByUserId({ userId }: { userId: string }) {
+        if (!userId) {
+            throw new ApiError(StatusCodes.BAD_REQUEST, 'Missing user id')
+        }
+
+        if (!isValidObjectId(userId)) {
+            throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid user id')
+        }
+
+        const booksHasBorrowed = await BorrowingModel.find({ userId })
+            .populate({
+                path: 'userId',
+                select: '-status -createdAt -updatedAt -__v',
+            })
+            .populate({
+                path: 'bookId',
+                select: '_id name price thumbnail slug',
+            })
+            .sort({})
+            .select('_id userId bookId quantity borrowDate dueDate status')
+            .lean()
+
+        if (!booksHasBorrowed) {
+            throw new ApiError(StatusCodes.NOT_FOUND, 'Borrowed book not found')
+        }
 
         const booksHasBorrowedPromises = booksHasBorrowed.map(async (book) => {
             return {
@@ -166,12 +296,15 @@ class BorrowingService {
         }
     }
 
-    async getByStatus({ status }: { status: string }) {
+    async getByStatus({ id }: { id: string }, { status }: { status: string }) {
         if (!status) {
             throw new ApiError(StatusCodes.BAD_REQUEST, 'Missing status')
         }
 
-        const booksHasBorrowed = await BorrowingModel.find({ status })
+        const booksHasBorrowed = await BorrowingModel.find({
+            userId: id,
+            status,
+        })
             .populate({
                 path: 'userId',
                 select: '-status -createdAt -updatedAt -__v',
@@ -197,16 +330,16 @@ class BorrowingService {
         return await Promise.all(booksHasBorrowedPromises)
     }
 
-    async getByUserId({ userId }: { userId: string }) {
-        if (!userId) {
+    async getByUserId({ id }: { id: string }) {
+        if (!id) {
             throw new ApiError(StatusCodes.BAD_REQUEST, 'Missing user id')
         }
 
-        if (!isValidObjectId(userId)) {
+        if (!isValidObjectId(id)) {
             throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid user id')
         }
 
-        const booksHasBorrowed = await BorrowingModel.find({ userId })
+        const booksHasBorrowed = await BorrowingModel.find({ userId: id })
             .populate({
                 path: 'userId',
                 select: '-status -createdAt -updatedAt -__v',
@@ -218,16 +351,18 @@ class BorrowingService {
             .select('_id userId bookId quantity borrowDate dueDate status')
             .lean()
 
-        const booksHasBorrowedPromises = booksHasBorrowed.map(async (book) => {
-            return {
-                ...book,
-                status: await this.updateStatusBasedOnDueDay({
-                    _id: book._id.toString(),
-                    dueDate: book.dueDate,
-                    status: book.status,
-                }),
+        const booksHasBorrowedPromises = <any>booksHasBorrowed.map(
+            async (book) => {
+                return {
+                    ...book,
+                    status: await this.updateStatusBasedOnDueDay({
+                        _id: book._id.toString(),
+                        dueDate: book.dueDate,
+                        status: book.status,
+                    }),
+                }
             }
-        })
+        )
 
         return await Promise.all(booksHasBorrowedPromises)
     }
@@ -274,7 +409,7 @@ class BorrowingService {
         }
     }
 
-    async return({ id }: { id: string }) {
+    async return({ userId }: { userId: string }, { id }: { id: string }) {
         if (!id) {
             throw new ApiError(StatusCodes.BAD_REQUEST, 'Missing borrowing id')
         }
@@ -303,6 +438,10 @@ class BorrowingService {
             )
         }
 
+        if (userId !== isExist.userId) {
+            throw new ApiError(StatusCodes.FORBIDDEN, 'Access denied')
+        }
+
         const trackingInfo = await this.updateStatus({
             id,
             status: TrackBookBorrowingStatus.RETURNED,
@@ -327,6 +466,7 @@ class BorrowingService {
     }
 
     async renew(
+        { userId }: { userId: string },
         { id }: { id: string },
         { numberOfRenewalDays }: { numberOfRenewalDays: number }
     ) {
@@ -356,6 +496,10 @@ class BorrowingService {
                 StatusCodes.NOT_FOUND,
                 'Borrowed books not found'
             )
+        }
+
+        if (userId !== isExist.userId) {
+            throw new ApiError(StatusCodes.FORBIDDEN, 'Access denied')
         }
 
         const trackingInfo = await this.updateStatus({
@@ -408,7 +552,6 @@ class BorrowingService {
         const currentDate = new Date()
 
         if (moment(dueDate).isBefore(currentDate)) {
-            console.log('1')
             if (status !== TrackBookBorrowingStatus.OVERDUE) {
                 await BorrowingModel.updateOne(
                     { _id },
