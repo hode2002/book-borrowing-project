@@ -1,38 +1,38 @@
 import express from 'express'
 import passport from 'passport'
+import multer from 'multer'
 
 import { UserController } from '../controllers'
 import { asyncHandler } from '../utils'
-import { IsLibrarian } from '../common/middlewares'
 
 const router = express.Router()
-
-router.post(
-    '/',
-    passport.authenticate('jwt', { session: false }),
-    IsLibrarian,
-    asyncHandler(UserController.createProfile)
-)
+const upload = multer({})
 
 router.get(
     '/',
     passport.authenticate('jwt', { session: false }),
-    IsLibrarian,
-    asyncHandler(UserController.getProfiles)
+    asyncHandler(UserController.getProfile)
 )
 
-router.get(
-    '/:id',
+router.patch(
+    '/update-address',
     passport.authenticate('jwt', { session: false }),
-    IsLibrarian,
-    asyncHandler(UserController.getProfileById)
+    asyncHandler(UserController.updateAddress)
 )
 
-router.get(
-    '/phone/:number',
+router.patch(
+    '/avatar',
     passport.authenticate('jwt', { session: false }),
-    IsLibrarian,
-    asyncHandler(UserController.getProfileByPhoneNumber)
+    upload.single('avatar'),
+    asyncHandler(UserController.updateAvatar)
+)
+
+router.patch('/forgot-password', asyncHandler(UserController.forgotPassword))
+
+router.patch(
+    '/change-password',
+    passport.authenticate('jwt', { session: false }),
+    asyncHandler(UserController.changePassword)
 )
 
 export default router
