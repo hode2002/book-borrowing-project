@@ -33,4 +33,22 @@ router.patch(
     asyncHandler(EmployeeController.changePassword)
 )
 
+router.get(
+    '/users',
+    passport.authenticate('jwt', { session: false }),
+    asyncHandler(EmployeeController.getUsers)
+)
+
+router.get(
+    '/users/:id',
+    passport.authenticate('jwt', { session: false }),
+    asyncHandler(EmployeeController.getUserById)
+)
+
+router.get(
+    '/users/status/:status',
+    passport.authenticate('jwt', { session: false }),
+    asyncHandler(EmployeeController.getUserByStatus)
+)
+
 export default router

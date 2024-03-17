@@ -30,6 +30,46 @@ class EmployeeService {
         return employee
     }
 
+    async getUsers() {
+        return await EmployeeModel.find()
+            .select(
+                '_id email lastName firstName dob address phoneNumber avatar status role'
+            )
+            .lean()
+    }
+
+    async getUserById({ id }: { id: string }) {
+        if (!id) {
+            throw new ApiError(StatusCodes.BAD_REQUEST, 'User id missing')
+        }
+
+        const user = await EmployeeModel.findOne()
+            .select(
+                '_id email lastName firstName dob address phoneNumber avatar status role'
+            )
+            .lean()
+
+        if (!user) {
+            throw new ApiError(StatusCodes.NOT_FOUND, 'User not found')
+        }
+
+        return user
+    }
+
+    async getUserByStatus({ status }: { status: string }) {
+        if (!status) {
+            throw new ApiError(StatusCodes.BAD_REQUEST, 'Status missing')
+        }
+
+        return await EmployeeModel.find({
+            status,
+        })
+            .select(
+                '_id email lastName firstName dob address phoneNumber avatar status role'
+            )
+            .lean()
+    }
+
     async updateAddress({ email }: { email: string }, address: Address) {
         if (!email) {
             throw new ApiError(StatusCodes.BAD_REQUEST, 'Email missing')
@@ -68,6 +108,65 @@ class EmployeeService {
         return {
             is_success: true,
             ...isUpdated,
+        }
+    }
+
+    async updatePassword({
+        email,
+        password,
+    }: {
+        email: string
+        password: string
+    }) {
+        if (!email) {
+            throw new ApiError(StatusCodes.BAD_REQUEST, 'Email missing')
+        }
+
+        if (!password) {
+            throw new ApiError(StatusCodes.BAD_REQUEST, 'Password missing')
+        }
+
+        const isExist = await EmployeeModel.findOne({
+            email,
+            status: EmployeeStatus.ACTIVE,
+        })
+            .select(
+                '_id email phoneNumber lastName firstName dob address gender avatar'
+            )
+            .lean()
+
+        if (!isExist) {
+            throw new ApiError(StatusCodes.NOT_FOUND, 'Employee not found')
+        }
+
+        const hashPassword = await bcrypt.hash(password, 10)
+        if (!hashPassword) {
+            throw new ApiError(
+                StatusCodes.UNPROCESSABLE_ENTITY,
+                `Can't create password`
+            )
+        }
+
+        const employee = await EmployeeModel.findOneAndUpdate(
+            { email, status: EmployeeStatus.ACTIVE },
+            { password: hashPassword },
+            { new: true }
+        )
+            .select(
+                '_id email phoneNumber lastName firstName dob address gender avatar role'
+            )
+            .lean()
+
+        if (!employee) {
+            throw new ApiError(
+                StatusCodes.UNPROCESSABLE_ENTITY,
+                `Can't create password`
+            )
+        }
+
+        return {
+            is_success: true,
+            ...employee,
         }
     }
 
