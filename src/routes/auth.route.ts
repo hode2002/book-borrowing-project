@@ -7,13 +7,27 @@ import { IsAdmin } from '../common/middlewares'
 
 const router = express.Router()
 
+router.post('/register', asyncHandler(AuthController.register))
+
+router.post('/user/active', asyncHandler(AuthController.activeUserEmail))
+
+router.post(
+    '/user/create-password',
+    asyncHandler(AuthController.createPassword)
+)
+
+router.post(
+    '/employee/create-password',
+    asyncHandler(AuthController.employeeCreatePassword)
+)
+
 router.post('/login', asyncHandler(AuthController.login))
 
-router.post('/otp/resend', asyncHandler(AuthController.resendOtp))
+router.post('/admin/login', asyncHandler(AuthController.administratorLogin))
+
+router.post('/otp/send', asyncHandler(AuthController.sendOtp))
 
 router.post('/otp/verify', asyncHandler(AuthController.verifyOtp))
-
-router.post('/create-password', asyncHandler(AuthController.createPassword))
 
 router.post(
     '/email-verification',
