@@ -1,1 +1,1 @@
-export * from './create-user.interface'
+export * from './user-avatar.interface'

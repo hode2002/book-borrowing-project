@@ -5,6 +5,10 @@ const { model, Schema } = mongoose
 const DOCUMENT_NAME = 'User'
 const COLLECTION_NAME = 'Users'
 
+export enum UserRoles {
+    USER = 'user',
+}
+
 export enum UserStatus {
     ACTIVE = 'active',
     INACTIVE = 'inactive',
@@ -12,12 +16,24 @@ export enum UserStatus {
 
 const userSchema = new Schema(
     {
+        email: {
+            type: String,
+            unique: true,
+            required: true,
+            trim: true,
+        },
+        password: {
+            type: String,
+            unique: true,
+            default: null,
+            trim: true,
+        },
         phoneNumber: {
             type: String,
             trim: true,
             maxLength: 10,
-            required: true,
             unique: true,
+            default: null,
         },
         lastName: {
             type: String,
@@ -36,31 +52,47 @@ const userSchema = new Schema(
         address: {
             Address: {
                 type: String,
+                default: null,
             },
             province: {
                 type: String,
-                required: true,
+                default: null,
             },
             district: {
                 type: String,
-                required: true,
+                default: null,
             },
             ward: {
                 type: String,
-                required: true,
+                default: null,
             },
             hamlet: {
                 type: String,
+                default: null,
             },
         },
         gender: {
             type: String,
-            required: true,
+            default: null,
         },
         status: {
             type: String,
             enum: UserStatus,
-            default: UserStatus.ACTIVE,
+            default: UserStatus.INACTIVE,
+            index: true,
+        },
+        avatar: {
+            type: String,
+            default:
+                'https://ct449-project.s3.ap-southeast-1.amazonaws.com/default.jpg',
+        },
+        refreshToken: {
+            type: String,
+            default: null,
+        },
+        role: {
+            type: String,
+            default: UserRoles.USER,
             index: true,
         },
     },
