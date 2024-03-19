@@ -130,8 +130,8 @@ class AuthService {
         const mailQueue = this.createMailQueue()
         const transporter = this.createTransporter()
 
-        mailQueue.process(async (job: any, done: Function) => {
-            await transporter.sendMail({
+        mailQueue.process((job: any, done: Function) => {
+            transporter.sendMail({
                 from: `"No Reply" <${process.env['MAIL_FROM']}>`,
                 to: job.data.email,
                 subject,
@@ -141,7 +141,10 @@ class AuthService {
             done()
         })
 
-        await mailQueue.add({ email, otpCode })
+        mailQueue.add(
+            { email, otpCode },
+            { removeOnComplete: 1000, removeOnFail: 1000 }
+        )
 
         return {
             is_success: true,
@@ -594,11 +597,14 @@ class AuthService {
     createTransporter() {
         return nodemailer.createTransport({
             host: process.env['MAIL_HOST'],
-            port: 587,
-            secure: false,
+            port: 465,
+            secure: true,
             auth: {
                 user: process.env['MAIL_USER'],
                 pass: process.env['MAIL_PASSWORD'],
+            },
+            tls: {
+                rejectUnauthorized: false,
             },
         })
     }
@@ -611,6 +617,7 @@ class AuthService {
                 username: <string>process.env['REDIS_USERNAME'],
                 password: <string>process.env['REDIS_PASSWORD'],
             },
+            prefix: 'ct449-project',
         })
     }
 }
