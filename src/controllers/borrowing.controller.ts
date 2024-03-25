@@ -56,7 +56,7 @@ class BookController {
         return new SuccessResponse({
             status: 'Success',
             code: StatusCodes.OK,
-            message: 'Get by user id success',
+            message: 'Get borrowed books by user id success',
             data: await BorrowingService.getByUserId(
                 req.user as { id: string }
             ),

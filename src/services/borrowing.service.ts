@@ -40,14 +40,21 @@ class BorrowingService {
             throw new ApiError(StatusCodes.NOT_FOUND, 'User not found')
         }
 
-        const result = await BorrowingModel.find({
+        const results = await BorrowingModel.find({
             userId: id,
             bookId: createBorrowing.bookId,
-            borrowDate: createBorrowing.borrowDate,
+            // borrowDate:  createBorrowing.borrowDate,
             status: TrackBookBorrowingStatus.PENDING,
         }).lean()
 
-        if (result?.length) {
+        const isExist = results.find((item) =>
+            moment(item.borrowDate).isSameOrBefore(
+                createBorrowing.borrowDate,
+                'day'
+            )
+        )
+
+        if (isExist) {
             throw new ApiError(
                 StatusCodes.CONFLICT,
                 `You can't borrow the same book twice in 1 day`
@@ -58,7 +65,11 @@ class BorrowingService {
             _id: createBorrowing.bookId,
         }).lean()
 
-        if (book!.quantity < createBorrowing.quantity) {
+        if (!book) {
+            throw new ApiError(StatusCodes.NOT_FOUND, 'Book not found')
+        }
+
+        if (book.quantity < createBorrowing.quantity) {
             throw new ApiError(
                 StatusCodes.UNPROCESSABLE_ENTITY,
                 'The current quantity of books is insufficient. Please return at another time or adjust the quantity.'
@@ -66,7 +77,11 @@ class BorrowingService {
         }
 
         const { _id, userId, bookId, quantity, borrowDate, dueDate, status } =
-            await BorrowingModel.create({ ...createBorrowing, userId: id })
+            await BorrowingModel.create({
+                ...createBorrowing,
+                borrowDate: moment(createBorrowing.borrowDate).format(),
+                userId: id,
+            })
 
         if (!_id) {
             throw new ApiError(
@@ -133,7 +148,7 @@ class BorrowingService {
             })
             .populate({
                 path: 'bookId',
-                select: '_id name price thumbnail slug',
+                select: '_id name thumbnail slug',
             })
             .select('_id userId bookId quantity borrowDate dueDate status')
             .lean()
@@ -159,7 +174,7 @@ class BorrowingService {
             })
             .populate({
                 path: 'bookId',
-                select: '_id name price thumbnail slug',
+                select: '_id name thumbnail slug',
             })
             .sort({ createdAt: 'desc' })
             .select('_id userId bookId quantity borrowDate dueDate status')
@@ -195,7 +210,7 @@ class BorrowingService {
             })
             .populate({
                 path: 'bookId',
-                select: '_id name price thumbnail slug',
+                select: '_id name thumbnail slug',
             })
             .sort({})
             .select('_id userId bookId quantity borrowDate dueDate status')
@@ -234,7 +249,7 @@ class BorrowingService {
             })
             .populate({
                 path: 'bookId',
-                select: '_id name price thumbnail slug',
+                select: '_id name thumbnail slug',
             })
             .sort({})
             .select('_id userId bookId quantity borrowDate dueDate status')
@@ -274,7 +289,7 @@ class BorrowingService {
             })
             .populate({
                 path: 'bookId',
-                select: '_id name price thumbnail slug',
+                select: '_id name thumbnail slug',
             })
             .select('_id userId bookId quantity borrowDate dueDate status')
             .lean()
@@ -311,7 +326,7 @@ class BorrowingService {
             })
             .populate({
                 path: 'bookId',
-                select: '_id name price thumbnail slug',
+                select: '_id name thumbnail slug',
             })
             .select('_id userId bookId quantity borrowDate dueDate status')
             .lean()
@@ -346,7 +361,17 @@ class BorrowingService {
             })
             .populate({
                 path: 'bookId',
-                select: '_id name price thumbnail slug',
+                select: '-createdAt -updatedAt -__v',
+                populate: [
+                    {
+                        path: 'authorId',
+                        select: '_id name photo description slug',
+                    },
+                    {
+                        path: 'publisherId',
+                        select: '_id name address slug',
+                    },
+                ],
             })
             .select('_id userId bookId quantity borrowDate dueDate status')
             .lean()
@@ -391,7 +416,7 @@ class BorrowingService {
             })
             .populate({
                 path: 'bookId',
-                select: '_id name price thumbnail slug',
+                select: '_id name thumbnail slug',
             })
             .select('_id userId bookId quantity borrowDate dueDate status')
             .lean()
@@ -522,7 +547,7 @@ class BorrowingService {
             })
             .populate({
                 path: 'bookId',
-                select: '_id name price thumbnail slug',
+                select: '_id name thumbnail slug',
             })
             .select('_id userId bookId quantity borrowDate dueDate status')
             .lean()

@@ -14,6 +14,12 @@ router.get(
     asyncHandler(UserController.getProfile)
 )
 
+router.post(
+    '/',
+    passport.authenticate('jwt', { session: false }),
+    asyncHandler(UserController.updateProfile)
+)
+
 router.patch(
     '/update-address',
     passport.authenticate('jwt', { session: false }),

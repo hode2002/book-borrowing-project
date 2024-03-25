@@ -171,9 +171,25 @@ class AuthService {
         }
 
         const deletedCount = (await OtpModel.deleteMany({ email })).deletedCount
+        if (!deletedCount) {
+            throw new ApiError(
+                StatusCodes.UNPROCESSABLE_ENTITY,
+                `Can't delete otp code`
+            )
+        }
+
+        const user = await UserModel.findOne({ email }).lean()
+        if (user) {
+            await UserModel.updateOne({ email }, { status: UserStatus.ACTIVE })
+        } else {
+            await EmployeeModel.updateOne(
+                { email },
+                { status: EmployeeStatus.ACTIVE }
+            )
+        }
 
         return {
-            is_success: isMatches && deletedCount ? true : false,
+            is_success: true,
         }
     }
 
@@ -267,7 +283,9 @@ class AuthService {
             )
         }
 
-        const isMatches = await bcrypt.compare(password, user.password)
+        const { password: dbPass, role, _id, status, ...other } = user
+
+        const isMatches = await bcrypt.compare(password, dbPass)
         if (!isMatches) {
             throw new ApiError(
                 StatusCodes.NOT_FOUND,
@@ -278,7 +296,7 @@ class AuthService {
         const tokens = this.createTokenPairs({
             email,
             id: user._id.toString(),
-            role: user.role,
+            role,
         })
 
         const isUpdated = await UserModel.updateOne(
@@ -298,6 +316,7 @@ class AuthService {
         return {
             is_success: true,
             ...tokens,
+            ...other,
         }
     }
 
@@ -356,7 +375,7 @@ class AuthService {
             status: EmployeeStatus.ACTIVE,
         })
             .select(
-                'id email password lastName firstName dob address phoneNumber avatar status role'
+                'id email password lastName firstName dob address phoneNumber avatar role'
             )
             .lean()
 
@@ -372,7 +391,9 @@ class AuthService {
             )
         }
 
-        const isMatches = await bcrypt.compare(password, employee.password)
+        const { password: dbPass, role, _id, status, ...other } = employee
+
+        const isMatches = await bcrypt.compare(password, dbPass)
         if (!isMatches) {
             throw new ApiError(
                 StatusCodes.NOT_FOUND,
@@ -382,8 +403,8 @@ class AuthService {
 
         const tokens = this.createTokenPairs({
             email,
-            id: employee._id.toString(),
-            role: employee.role,
+            id: _id.toString(),
+            role,
         })
 
         const isUpdated = await EmployeeModel.updateOne(
@@ -403,6 +424,7 @@ class AuthService {
         return {
             is_success: true,
             ...tokens,
+            ...other,
         }
     }
 

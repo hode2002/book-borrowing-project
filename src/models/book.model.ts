@@ -13,10 +13,6 @@ const bookSchema = new Schema(
             trim: true,
             index: true,
         },
-        price: {
-            type: Number,
-            default: 0,
-        },
         quantity: {
             type: Number,
             default: 0,
@@ -34,6 +30,11 @@ const bookSchema = new Schema(
             type: Types.ObjectId,
             ref: 'Author',
             required: true,
+        },
+        category: {
+            type: Object,
+            name: String,
+            slug: String,
         },
         thumbnail: {
             type: String,
@@ -62,6 +63,7 @@ const bookSchema = new Schema(
 ).pre('save', function (next) {
     const book = this
     book.slug = createSlug(book.name as string)
+    book.category.slug = createSlug(book.category.name as string)
     next()
 })
 

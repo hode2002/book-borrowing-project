@@ -37,8 +37,59 @@ class BookController {
         return new SuccessResponse({
             status: 'Success',
             code: StatusCodes.OK,
-            message: 'Get author by id success',
+            message: 'Get book by id success',
             data: await BookService.getById(req.params as { id: string }),
+        }).send(res)
+    }
+
+    async getBySlug(req: Request, res: Response) {
+        return new SuccessResponse({
+            status: 'Success',
+            code: StatusCodes.OK,
+            message: 'Get book by slug success',
+            data: await BookService.getBySlug(req.params as { slug: string }),
+        }).send(res)
+    }
+
+    async getBySearchTerm(req: Request, res: Response) {
+        return new SuccessResponse({
+            status: 'Success',
+            code: StatusCodes.OK,
+            message: 'Get book by search term success',
+            data: await BookService.getBySearchTerm(
+                req.query as { searchTerm: string }
+            ),
+        }).send(res)
+    }
+
+    async getByAuthorId(req: Request, res: Response) {
+        return new SuccessResponse({
+            status: 'Success',
+            code: StatusCodes.OK,
+            message: 'Get book by author success',
+            data: await BookService.getByAuthorId(req.params as { id: string }),
+        }).send(res)
+    }
+
+    async getByCateName(req: Request, res: Response) {
+        return new SuccessResponse({
+            status: 'Success',
+            code: StatusCodes.OK,
+            message: 'Get book by category success',
+            data: await BookService.getByCateName(
+                req.params as { slug: string }
+            ),
+        }).send(res)
+    }
+
+    async getByPublisherId(req: Request, res: Response) {
+        return new SuccessResponse({
+            status: 'Success',
+            code: StatusCodes.OK,
+            message: 'Get book by publisher success',
+            data: await BookService.getByPublisherId(
+                req.params as { id: string }
+            ),
         }).send(res)
     }
 
@@ -46,7 +97,7 @@ class BookController {
         return new SuccessResponse({
             status: 'Success',
             code: StatusCodes.OK,
-            message: 'Update author by id success',
+            message: 'Update book by id success',
             data: await BookService.updateById(
                 req.params as { id: string },
                 req.body as UpdateBookInterface

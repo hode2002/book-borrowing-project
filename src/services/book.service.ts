@@ -9,7 +9,6 @@ class BookService {
     async create(createBook: CreateBookInterface) {
         if (
             !createBook.name ||
-            !createBook.price ||
             !createBook.quantity ||
             !createBook.publisherId ||
             !createBook.authorId
@@ -24,7 +23,7 @@ class BookService {
 
         const isExist = await BookModel.findOne({ slug })
             .select(
-                '_id name price quantity description publication_year thumbnail images publisherId authorId other_info'
+                '_id name quantity description publication_year thumbnail images publisherId authorId category other_info slug'
             )
             .lean()
 
@@ -35,7 +34,6 @@ class BookService {
         const {
             _id,
             name,
-            price,
             quantity,
             publication_year,
             publisherId,
@@ -44,6 +42,7 @@ class BookService {
             description,
             images,
             other_info,
+            category,
         } = await BookModel.create({ ...createBook })
         if (!_id) {
             throw new ApiError(
@@ -57,7 +56,6 @@ class BookService {
             book: {
                 _id,
                 name,
-                price,
                 quantity,
                 publication_year,
                 publisherId,
@@ -66,21 +64,41 @@ class BookService {
                 description,
                 images,
                 other_info,
+                category,
             },
         }
     }
 
     async getAll() {
-        return await BookModel.find({
+        const books = await BookModel.find({
             quantity: { $gt: 0 },
         })
-            .select('_id name price quantity thumbnail')
+            .populate({
+                path: 'authorId',
+                select: '_id name photo description slug',
+            })
+            .populate({ path: 'publisherId', select: '_id name address slug' })
+            .select(
+                '_id name quantity description publication_year thumbnail images publisherId authorId category other_info slug'
+            )
             .lean()
+
+        return {
+            is_success: true,
+            books,
+        }
     }
 
     async adminGetAll() {
         return await BookModel.find()
-            .select('_id name price quantity thumbnail')
+            .populate({
+                path: 'authorId',
+                select: '_id name photo description slug',
+            })
+            .populate({ path: 'publisherId', select: '_id name address slug' })
+            .select(
+                '_id name quantity description publication_year thumbnail images publisherId authorId category other_info slug'
+            )
             .lean()
     }
 
@@ -100,7 +118,7 @@ class BookService {
             })
             .populate({ path: 'publisherId', select: '_id name address slug' })
             .select(
-                '_id name price quantity description publication_year thumbnail images publisherId authorId other_info'
+                '_id name quantity description publication_year thumbnail images publisherId authorId category other_info slug'
             )
             .lean()
 
@@ -111,6 +129,133 @@ class BookService {
         return {
             is_success: true,
             book,
+        }
+    }
+
+    async getBySlug({ slug }: { slug: string }) {
+        if (!slug) {
+            throw new ApiError(StatusCodes.BAD_REQUEST, 'Missing book name')
+        }
+
+        const book = await BookModel.findOne({ slug, quantity: { $gt: 0 } })
+            .populate({
+                path: 'authorId',
+                select: '_id name photo description slug',
+            })
+            .populate({ path: 'publisherId', select: '_id name address slug' })
+            .select(
+                '_id name quantity description publication_year thumbnail images publisherId authorId category other_info slug'
+            )
+            .lean()
+
+        if (!book) {
+            throw new ApiError(StatusCodes.NOT_FOUND, 'Book not found')
+        }
+
+        return {
+            is_success: true,
+            book,
+        }
+    }
+
+    async getBySearchTerm({ searchTerm }: { searchTerm: string }) {
+        if (!searchTerm) {
+            throw new ApiError(StatusCodes.BAD_REQUEST, 'Missing key word')
+        }
+
+        const books = await BookModel.find({
+            slug: searchTerm,
+            quantity: { $gt: 0 },
+        })
+            .populate({
+                path: 'authorId',
+                select: '_id name photo description slug',
+            })
+            .populate({ path: 'publisherId', select: '_id name address slug' })
+            .select(
+                '_id name quantity description publication_year thumbnail images publisherId authorId category other_info slug'
+            )
+            .lean()
+
+        return {
+            is_success: true,
+            books,
+        }
+    }
+
+    async getByCateName({ slug }: { slug: string }) {
+        if (!slug) {
+            throw new ApiError(StatusCodes.BAD_REQUEST, 'Missing category')
+        }
+
+        const books = await BookModel.find({ 'category.slug': slug })
+            .populate({
+                path: 'authorId',
+                select: '_id name photo description slug',
+            })
+            .populate({ path: 'publisherId', select: '_id name address slug' })
+            .select(
+                '_id name quantity description publication_year thumbnail images publisherId authorId category other_info slug'
+            )
+            .lean()
+
+        return {
+            is_success: true,
+            books,
+        }
+    }
+
+    async getByAuthorId({ id }: { id: string }) {
+        if (!id) {
+            throw new ApiError(StatusCodes.BAD_REQUEST, 'Missing author id')
+        }
+
+        if (!isValidObjectId(id)) {
+            throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid author id')
+        }
+
+        const books = await BookModel.find({ authorId: id })
+            .populate({ path: 'publisherId', select: '_id name address slug' })
+            .select(
+                '_id name quantity description publication_year thumbnail images publisherId authorId category other_info slug'
+            )
+            .lean()
+
+        return {
+            is_success: true,
+            books,
+        }
+    }
+
+    async getByPublisherId({ id }: { id: string }) {
+        if (!id) {
+            throw new ApiError(
+                StatusCodes.BAD_REQUEST,
+                'Missing book publisher id'
+            )
+        }
+
+        if (!isValidObjectId(id)) {
+            throw new ApiError(
+                StatusCodes.BAD_REQUEST,
+                'Invalid book publisher id'
+            )
+        }
+
+        const books = await BookModel.find({ publisherId: id })
+            .populate({
+                path: 'authorId',
+                select: '_id name photo description slug',
+            })
+            .populate({ path: 'publisherId', select: '_id name address slug' })
+            .select(
+                '_id name quantity description publication_year thumbnail images publisherId authorId category other_info slug'
+            )
+            .lean()
+
+        return {
+            is_success: true,
+            books,
         }
     }
 
@@ -125,7 +270,7 @@ class BookService {
 
         const isExist = await BookModel.findOne({ _id: id })
             .select(
-                '_id name price quantity description publication_year thumbnail images publisherId authorId other_info'
+                '_id name quantity description publication_year thumbnail images publisherId authorId category other_info slug'
             )
             .lean()
 
@@ -151,7 +296,7 @@ class BookService {
             })
             .populate({ path: 'publisherId', select: '_id name address slug' })
             .select(
-                '_id name price quantity description publication_year thumbnail images publisherId authorId other_info'
+                '_id name quantity description publication_year thumbnail images publisherId authorId category other_info slug'
             )
             .lean()
 

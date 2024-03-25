@@ -16,7 +16,17 @@ router.get(
     asyncHandler(BookController.adminGetAll)
 )
 
+router.get('/search', asyncHandler(BookController.getBySearchTerm))
+
 router.get('/:id', asyncHandler(BookController.getById))
+
+router.get('/name/:slug', asyncHandler(BookController.getBySlug))
+
+router.get('/author/:id', asyncHandler(BookController.getByAuthorId))
+
+router.get('/category/:slug', asyncHandler(BookController.getByCateName))
+
+router.get('/publishers/:id', asyncHandler(BookController.getByPublisherId))
 
 router.post(
     '/',

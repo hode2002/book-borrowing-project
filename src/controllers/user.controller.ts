@@ -3,7 +3,7 @@ import { StatusCodes } from 'http-status-codes'
 
 import { SuccessResponse } from '../common/response'
 import { UserService } from '../services'
-import { Address, UserAvatar } from '../common/interfaces'
+import { Address, UserAvatar, UserProfile } from '../common/interfaces'
 
 class EmployeeController {
     async getProfile(req: Request, res: Response) {
@@ -15,11 +15,23 @@ class EmployeeController {
         }).send(res)
     }
 
+    async updateProfile(req: Request, res: Response) {
+        return new SuccessResponse({
+            status: 'Success',
+            code: StatusCodes.OK,
+            message: 'Update user profile success',
+            data: await UserService.updateProfile(
+                req.user as { id: string },
+                req.body as UserProfile
+            ),
+        }).send(res)
+    }
+
     async updateAddress(req: Request, res: Response) {
         return new SuccessResponse({
             status: 'Success',
             code: StatusCodes.OK,
-            message: 'Update user avatar success',
+            message: 'Update user address success',
             data: await UserService.updateAddress(
                 req.user as { email: string },
                 req.body as Address

@@ -4,9 +4,9 @@ import * as bcrypt from 'bcrypt'
 
 import { UserModel } from '../models'
 import { ApiError, handleUploadAvatar } from '../utils'
-import { Address, UserAvatar } from '../common/interfaces'
+import { Address, UserAvatar, UserProfile } from '../common/interfaces'
 import { UserStatus } from '../models/user.model'
-import { AuthService, MediaService } from '.'
+import { AuthService } from '.'
 
 class UserService {
     async getProfile({ id }: { id: string }) {
@@ -22,6 +22,38 @@ class UserService {
             _id: id,
             status: UserStatus.ACTIVE,
         })
+            .select(
+                '_id email phoneNumber lastName firstName dob address gender avatar'
+            )
+            .lean()
+
+        if (!user) {
+            throw new ApiError(StatusCodes.NOT_FOUND, 'User not found')
+        }
+
+        return {
+            is_success: true,
+            user,
+        }
+    }
+
+    async updateProfile({ id }: { id: string }, profile: UserProfile) {
+        if (!id) {
+            throw new ApiError(StatusCodes.BAD_REQUEST, 'Missing user id')
+        }
+
+        if (!isValidObjectId(id)) {
+            throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid borrowing id')
+        }
+
+        const user = await UserModel.findOneAndUpdate(
+            {
+                _id: id,
+                status: UserStatus.ACTIVE,
+            },
+            { ...profile },
+            { new: true }
+        )
             .select(
                 '_id email phoneNumber lastName firstName dob address gender avatar'
             )
